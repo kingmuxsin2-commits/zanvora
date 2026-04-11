@@ -2,6 +2,7 @@
 
 return [
 
+
     /*
     |--------------------------------------------------------------------------
     | Application Name
@@ -12,7 +13,7 @@ return [
     | other UI elements where an application name needs to be displayed.
     |
     */
-
+        
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
@@ -123,4 +124,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
 ];
