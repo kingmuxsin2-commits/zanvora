@@ -7,7 +7,31 @@ use Illuminate\Support\Facades\Redis;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\MagicLinkController;
 use App\Http\Controllers\Api\V1\Admin\SupplierController;
+use App\Http\Controllers\Api\V1\Supplier\ProductController as SupplierProductController;
+use App\Http\Controllers\Api\V1\Admin\ProductApprovalController;
+use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\OrderController;
 
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/orders', [OrderController::class, 'store']);
+});
+
+// Public product routes
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{product}', [ProductController::class, 'show']);
+
+// Supplier product management
+Route::middleware('auth:sanctum')->prefix('supplier')->group(function () {
+    Route::apiResource('products', SupplierProductController::class);
+});
+
+// Admin product approval
+Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+    Route::get('/products/pending', [ProductApprovalController::class, 'index']);
+    Route::get('/products/all', [ProductApprovalController::class, 'all']);
+    Route::post('/products/{product}/approve', [ProductApprovalController::class, 'approve']);
+    Route::post('/products/{product}/reject', [ProductApprovalController::class, 'reject']);
+});
 Route::post('/test-register', function (Request $request) {
     return response()->json(['message' => 'Route works', 'data' => $request->all()]);
 }); 

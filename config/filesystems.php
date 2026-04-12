@@ -12,7 +12,7 @@ return [
     | based disks are available to your application for file storage.
     |
     */
-
+    
     'default' => env('FILESYSTEM_DISK', 'local'),
 
     /*
@@ -77,4 +77,21 @@ return [
         public_path('storage') => storage_path('app/public'),
     ],
 
+    'disks' => [
+    // ... existing disks
+    
+    'spaces' => [
+        'driver' => 's3',
+        'key' => env('DO_SPACES_KEY'),
+        'secret' => env('DO_SPACES_SECRET'),
+        'endpoint' => env('DO_SPACES_ENDPOINT'),
+        'region' => env('DO_SPACES_REGION'),
+        'bucket' => env('DO_SPACES_BUCKET'),
+        'url' => env('DO_SPACES_URL'),
+        'visibility' => 'public',
+        'options' => [
+            'CacheControl' => 'max-age=31536000',
+        ],
+    ],
+],
 ];
