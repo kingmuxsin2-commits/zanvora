@@ -11,9 +11,31 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    ->withMiddleware(function (Middleware $middleware): void {
-        //
+    ->withMiddleware(function (Middleware $middleware) {
+        // 🌐 Global CORS - must be first
+        $middleware->prepend(\App\Http\Middleware\GlobalCorsMiddleware::class);
+
+        // Built-in Laravel CORS (handles preflight)
+        $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);
+
+        // Disable CSRF for API routes (development)
+        $middleware->validateCsrfTokens(except: [
+            'api/*',
+        ]);
+
+        // Sanctum for SPA authentication
+        $middleware->api(prepend: [
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
+
+        // Return 401 JSON instead of redirecting to login
+        $middleware->redirectGuestsTo(function ($request) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+            return null;
+        });
     })
-    ->withExceptions(function (Exceptions $exceptions): void {
+    ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();

@@ -11,6 +11,11 @@ use App\Http\Controllers\Api\V1\Supplier\ProductController as SupplierProductCon
 use App\Http\Controllers\Api\V1\Admin\ProductApprovalController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\OrderController;
+use Laravel\Sanctum\Http\Controllers\CsrfCookieController;
+ 
+
+
+Route::get('/sanctum/csrf-cookie', [CsrfCookieController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);

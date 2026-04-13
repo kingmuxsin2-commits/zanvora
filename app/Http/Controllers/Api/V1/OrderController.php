@@ -15,45 +15,47 @@ class OrderController extends Controller
 {
     public function store(Request $request)
     {
-        $user = $request->user();
-        
-        $validated = $request->validate([
-            'shipping_address' => 'required|array',
-            'shipping_address.name' => 'required|string',
-            'shipping_address.phone' => 'required|string',
-            'shipping_address.address' => 'required|string',
-            'shipping_address.city' => 'required|string',
-            'shipping_address.postal_code' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
-        ]);
-
-        DB::beginTransaction();
         try {
-            $orderNumber = 'ORD-' . date('Ymd') . '-' . Str::upper(Str::random(4));
+            $user = $request->user();
+
+            $validated = $request->validate([
+                'shipping_address' => 'required|array',
+                'shipping_address.name' => 'required|string',
+                'shipping_address.phone' => 'required|string',
+                'shipping_address.address' => 'required|string',
+                'shipping_address.city' => 'required|string',
+                'shipping_address.postal_code' => 'nullable|string',
+                'items' => 'required|array|min:1',
+                'items.*.product_id' => 'required|exists:products,id',
+                'items.*.quantity' => 'required|integer|min:1',
+            ]);
+
+            DB::beginTransaction();
             
+            $orderNumber = 'ORD-' . date('Ymd') . '-' . Str::upper(Str::random(4));
             $totalAmount = 0;
             $items = [];
-            
-            // Validate stock and calculate totals
+
             foreach ($validated['items'] as $itemData) {
-                $product = Product::where('id', $itemData['product_id'])
+                $product = Product::with('supplier')
+                    ->where('id', $itemData['product_id'])
                     ->where('status', 'active')
                     ->firstOrFail();
-                
+
                 if ($product->stock_qty < $itemData['quantity']) {
-                    throw new \Exception("Insufficient stock for {$product->title}");
+                    return response()->json([
+                        'message' => "Insufficient stock for {$product->title}"
+                    ], 400);
                 }
-                
+
                 $totalAmount += $product->retail_price * $itemData['quantity'];
-                
+
                 $items[] = [
                     'product' => $product,
                     'quantity' => $itemData['quantity'],
                 ];
             }
-            
+
             $order = Order::create([
                 'order_number' => $orderNumber,
                 'customer_id' => $user->id,
@@ -65,14 +67,13 @@ class OrderController extends Controller
                 'payment_phone' => $validated['shipping_address']['phone'],
                 'payment_status' => 'pending_manual',
             ]);
-            
+
             foreach ($items as $item) {
                 $product = $item['product'];
                 $quantity = $item['quantity'];
-                
-                // Deduct stock
+
                 $product->decrement('stock_qty', $quantity);
-                
+
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
@@ -82,8 +83,7 @@ class OrderController extends Controller
                     'supplier_id' => $product->supplier_id,
                     'commission_earned' => $product->retail_price - $product->wholesale_price,
                 ]);
-                
-                // Create fulfillment record (awaiting payment)
+
                 Fulfillment::create([
                     'order_id' => $order->id,
                     'supplier_id' => $product->supplier_id,
@@ -91,14 +91,18 @@ class OrderController extends Controller
                     'shipping_cost' => $product->supplier->shipping_flat_fee ?? 0,
                 ]);
             }
-            
+
             DB::commit();
-            
+
             return response()->json($order->load('items'), 201);
-            
+
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => $e->getMessage()], 400);
+            return response()->json([
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ], 500);
         }
     }
 }
