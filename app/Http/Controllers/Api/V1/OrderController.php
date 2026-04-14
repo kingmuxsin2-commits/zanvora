@@ -204,4 +204,27 @@ class OrderController extends Controller
 
         return response()->json($fulfillments);
     }
+
+    /**
+     * Update payment reference override (admin only).
+     */
+    public function updatePaymentReference(Request $request, Order $order)
+    {
+        $user = $request->user();
+
+        if (!in_array($user->role, ['admin', 'staff'])) {
+            abort(403, 'Unauthorized');
+        }
+
+        $request->validate([
+            'payment_reference_override' => 'required|string|max:100',
+        ]);
+
+        $order->update(['payment_reference_override' => $request->payment_reference_override]);
+
+        return response()->json([
+            'message' => 'Reference override saved.',
+            'order' => $order->fresh(),
+        ]);
+    }
 }

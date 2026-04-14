@@ -87,6 +87,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/suppliers/{supplier}/reject', [SupplierController::class, 'reject']);
         Route::get('/reports/payout', [ReportController::class, 'payoutReport']);
         Route::post('/suppliers/{supplier}/mark-paid', [ReportController::class, 'markPaid']);
+        Route::post('/orders/{order}/payment-reference', [OrderController::class, 'updatePaymentReference']);
 
         // Product Approval
         Route::get('/products/pending', [ProductApprovalController::class, 'index']);
