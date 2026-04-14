@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\Admin\PaymentVerificationController;
 use Laravel\Sanctum\Http\Controllers\CsrfCookieController;
+use App\Http\Controllers\Api\V1\Supplier\FulfillmentController;
+use App\Http\Controllers\Api\V1\Admin\ReportController;
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -50,6 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/my-orders', [OrderController::class, 'myOrders']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::get('/orders', [OrderController::class, 'supplierOrders']);
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
@@ -58,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::post('/orders/{order}/claim-payment', [OrderController::class, 'claimPayment']);
+    Route::put('/fulfillments/{fulfillment}', [FulfillmentController::class, 'update']);
 
     /*
     |----------------------------------------------------------------------
@@ -66,6 +70,8 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::prefix('supplier')->group(function () {
         Route::apiResource('products', SupplierProductController::class);
+        Route::get('/orders', [OrderController::class, 'supplierOrders']);
+        Route::put('/fulfillments/{fulfillment}', [FulfillmentController::class, 'update']);
     });
 
     /*
@@ -79,6 +85,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/suppliers/pending', [SupplierController::class, 'pending']);
         Route::post('/suppliers/{supplier}/approve', [SupplierController::class, 'approve']);
         Route::post('/suppliers/{supplier}/reject', [SupplierController::class, 'reject']);
+        Route::get('/reports/payout', [ReportController::class, 'payoutReport']);
+        Route::post('/suppliers/{supplier}/mark-paid', [ReportController::class, 'markPaid']);
 
         // Product Approval
         Route::get('/products/pending', [ProductApprovalController::class, 'index']);

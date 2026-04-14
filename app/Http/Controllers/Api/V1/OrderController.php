@@ -157,11 +157,51 @@ class OrderController extends Controller
     public function myOrders(Request $request)
     {
         $user = $request->user();
-        
+
         $orders = Order::where('customer_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->get();
 
         return response()->json($orders);
+    }
+
+    /**
+     * Get orders for the authenticated supplier that are ready to fulfill.
+     */
+    public function supplierOrders(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->role !== 'supplier') {
+            abort(403, 'Unauthorized');
+        }
+
+        $supplier = $user->supplier;
+        if (!$supplier) {
+            return response()->json(['message' => 'Supplier profile not found'], 404);
+        }
+
+        // Get fulfillments that are pending and belong to this supplier
+        $fulfillments = Fulfillment::with([
+                'order' => function ($query) {
+                    $query->select('id', 'order_number', 'customer_id', 'shipping_address', 'status');
+                },
+                'order.customer' => function ($query) {
+                    $query->select('id', 'name', 'phone');
+                },
+                'order.items' => function ($query) use ($supplier) {
+                    $query->where('supplier_id', $supplier->id)
+                          ->select('id', 'order_id', 'product_id', 'quantity');
+                },
+                'order.items.product' => function ($query) {
+                    $query->select('id', 'title');
+                }
+            ])
+            ->where('supplier_id', $supplier->id)
+            ->where('status', 'pending')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($fulfillments);
     }
 }
