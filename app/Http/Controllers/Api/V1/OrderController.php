@@ -10,28 +10,32 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\PaymentClaimed;
 
 class OrderController extends Controller
 {
+    /**
+     * Store a newly created order.
+     */
     public function store(Request $request)
     {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'shipping_address' => 'required|array',
+            'shipping_address.name' => 'required|string',
+            'shipping_address.phone' => 'required|string',
+            'shipping_address.address' => 'required|string',
+            'shipping_address.city' => 'required|string',
+            'shipping_address.postal_code' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1',
+        ]);
+
+        DB::beginTransaction();
         try {
-            $user = $request->user();
-
-            $validated = $request->validate([
-                'shipping_address' => 'required|array',
-                'shipping_address.name' => 'required|string',
-                'shipping_address.phone' => 'required|string',
-                'shipping_address.address' => 'required|string',
-                'shipping_address.city' => 'required|string',
-                'shipping_address.postal_code' => 'nullable|string',
-                'items' => 'required|array|min:1',
-                'items.*.product_id' => 'required|exists:products,id',
-                'items.*.quantity' => 'required|integer|min:1',
-            ]);
-
-            DB::beginTransaction();
-            
             $orderNumber = 'ORD-' . date('Ymd') . '-' . Str::upper(Str::random(4));
             $totalAmount = 0;
             $items = [];
@@ -43,9 +47,7 @@ class OrderController extends Controller
                     ->firstOrFail();
 
                 if ($product->stock_qty < $itemData['quantity']) {
-                    return response()->json([
-                        'message' => "Insufficient stock for {$product->title}"
-                    ], 400);
+                    throw new \Exception("Insufficient stock for {$product->title}");
                 }
 
                 $totalAmount += $product->retail_price * $itemData['quantity'];
@@ -98,11 +100,68 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ], 500);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
+    }
+
+    /**
+     * Display the specified order.
+     */
+    public function show(Request $request, Order $order)
+    {
+        $user = $request->user();
+
+        // Customers can only view their own orders
+        if ($user->role === 'customer' && $order->customer_id !== $user->id) {
+            abort(403);
+        }
+
+        // Suppliers can view orders containing their items
+        if ($user->role === 'supplier') {
+            $hasItems = $order->items()->where('supplier_id', $user->supplier->id)->exists();
+            if (!$hasItems) {
+                abort(403);
+            }
+        }
+
+        $order->load(['items.product', 'fulfillments.supplier', 'customer']);
+
+        return response()->json($order);
+    }
+
+    /**
+     * Customer claims payment.
+     */
+    public function claimPayment(Request $request, Order $order)
+    {
+        if ($order->customer_id !== $request->user()->id) {
+            abort(403);
+        }
+
+        if ($order->payment_status !== 'pending_manual') {
+            return response()->json(['message' => 'Payment already processed'], 400);
+        }
+
+        // Send email to admin
+        Mail::to(config('mail.admin_address', env('ADMIN_EMAIL')))
+            ->send(new PaymentClaimed($order));
+
+        $order->update(['payment_claimed_at' => now()]);
+
+        return response()->json(['message' => 'Admin notified']);
+    }
+
+    /**
+     * Get all orders for the authenticated customer.
+     */
+    public function myOrders(Request $request)
+    {
+        $user = $request->user();
+        
+        $orders = Order::where('customer_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($orders);
     }
 }
