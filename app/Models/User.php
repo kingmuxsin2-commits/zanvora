@@ -63,6 +63,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the credits received by the user.
+     */
+    public function creditsReceived(): HasMany
+    {
+        return $this->hasMany(Credit::class, 'customer_id');
+    }
+
+    /**
+     * Get the credits issued by the user (admin).
+     */
+    public function creditsIssued(): HasMany
+    {
+        return $this->hasMany(Credit::class, 'issued_by');
+    }
+
+    /**
      * Check if user is admin.
      */
     public function isAdmin(): bool

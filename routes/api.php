@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\V1\Admin\PaymentVerificationController;
 use Laravel\Sanctum\Http\Controllers\CsrfCookieController;
 use App\Http\Controllers\Api\V1\Supplier\FulfillmentController;
 use App\Http\Controllers\Api\V1\Admin\ReportController;
+use App\Http\Controllers\Api\V1\Admin\CommissionTierController;
+use App\Http\Controllers\Api\V1\Admin\CreditController;
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -88,6 +90,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/payout', [ReportController::class, 'payoutReport']);
         Route::post('/suppliers/{supplier}/mark-paid', [ReportController::class, 'markPaid']);
         Route::post('/orders/{order}/payment-reference', [OrderController::class, 'updatePaymentReference']);
+        Route::apiResource('commission-tiers', CommissionTierController::class);
+        Route::post('/orders/{order}/credits', [CreditController::class, 'store']);
+        Route::get('/orders/{order}/credits', [CreditController::class, 'index']);
 
         // Product Approval
         Route::get('/products/pending', [ProductApprovalController::class, 'index']);
