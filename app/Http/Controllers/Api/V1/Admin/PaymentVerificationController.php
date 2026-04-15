@@ -7,6 +7,8 @@ use App\Models\Fulfillment;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\SupplierNewOrder;
 
 class PaymentVerificationController extends Controller
 {
@@ -50,6 +52,17 @@ class PaymentVerificationController extends Controller
             Fulfillment::where('order_id', $order->id)
                 ->where('status', 'awaiting_payment')
                 ->update(['status' => 'pending']);
+                
+            // Send email notifications to suppliers
+            $fulfillments = Fulfillment::where('order_id', $order->id)
+                ->where('status', 'pending')
+                ->with('supplier.user')
+                ->get();
+                
+            foreach ($fulfillments as $fulfillment) {
+                Mail::to($fulfillment->supplier->user->email)
+                    ->queue(new SupplierNewOrder($fulfillment));
+            }
         });
         
         return response()->json(['message' => 'Payment confirmed', 'order' => $order->fresh()]);

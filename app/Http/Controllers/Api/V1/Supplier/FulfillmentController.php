@@ -6,6 +6,8 @@ use App\Models\Fulfillment;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\CustomerShipment;
 
 class FulfillmentController extends Controller
 {
@@ -58,9 +60,11 @@ class FulfillmentController extends Controller
             } else {
                 $order->update(['status' => 'partial_shipped']);
             }
-
-            // TODO: Send email notification to customer with tracking info
         });
+
+        // Send email notification to customer with tracking info (queued)
+        Mail::to($fulfillment->order->customer->email)
+            ->queue(new CustomerShipment($fulfillment));
 
         return response()->json(['message' => 'Fulfillment marked as shipped', 'fulfillment' => $fulfillment->fresh()]);
     }
