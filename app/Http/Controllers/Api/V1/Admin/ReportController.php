@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Models\Supplier;
+use App\Models\PayoutLog;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
@@ -50,12 +51,18 @@ class ReportController extends Controller
                     ->whereBetween('orders.payment_confirmed_at', [$startDate, $endDate])
                     ->sum('order_items.wholesale_cost');
 
+                // Check if a payout log already exists for this supplier in this period
+                $alreadyPaid = PayoutLog::where('supplier_id', $supplier->id)
+                    ->whereBetween('created_at', [$startDate, $endDate])
+                    ->exists();
+
                 return [
                     'id'              => $supplier->id,
                     'business_name'   => $supplier->business_name,
                     'email'           => $supplier->user->email,
                     'payment_details' => $supplier->payment_details,
                     'total_owed'      => round((float) $totalOwed, 2),
+                    'paid'            => $alreadyPaid,   // ✅ new field
                 ];
             })
             ->filter(fn($s) => $s['total_owed'] > 0)
@@ -81,8 +88,13 @@ class ReportController extends Controller
             'notes'  => 'nullable|string',
         ]);
 
-        // In a full implementation, you'd log this to a payout_logs table.
-        // For now, we simply return a success response.
+        // Log the payout for auditing
+        PayoutLog::create([
+            'supplier_id' => $supplier->id,
+            'amount'      => $request->amount,
+            'paid_by'     => $request->user()->id,
+            'notes'       => $request->notes,
+        ]);
 
         return response()->json([
             'message'   => 'Supplier marked as paid',

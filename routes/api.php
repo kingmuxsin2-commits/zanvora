@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Supplier\FulfillmentController;
 use App\Http\Controllers\Api\V1\Admin\ReportController;
 use App\Http\Controllers\Api\V1\Admin\CommissionTierController;
 use App\Http\Controllers\Api\V1\Admin\CreditController;
+use App\Http\Controllers\Api\V1\Admin\DashboardController;
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -93,6 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('commission-tiers', CommissionTierController::class);
         Route::post('/orders/{order}/credits', [CreditController::class, 'store']);
         Route::get('/orders/{order}/credits', [CreditController::class, 'index']);
+        Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 
         // Product Approval
         Route::get('/products/pending', [ProductApprovalController::class, 'index']);
