@@ -105,6 +105,38 @@ class OrderController extends Controller
     }
 
     /**
+     * Display a listing of orders (admin only).
+     */
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        
+        if (!in_array($user->role, ['admin', 'staff'])) {
+            abort(403, 'Unauthorized');
+        }
+        
+        $query = Order::with('customer', 'items.product')
+            ->orderBy('created_at', 'desc');
+        
+        if ($request->has('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+        
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('order_number', 'like', "%{$search}%")
+                  ->orWhereHas('customer', function ($q) use ($search) {
+                      $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+        
+        return response()->json($query->paginate(20));
+    }
+
+    /**
      * Display the specified order.
      */
     public function show(Request $request, Order $order)
@@ -203,6 +235,67 @@ class OrderController extends Controller
             ->get();
 
         return response()->json($fulfillments);
+    }
+
+    /**
+     * Get earnings data for the authenticated supplier.
+     */
+    public function earnings(Request $request)
+    {
+        $user = $request->user();
+        
+        if ($user->role !== 'supplier') {
+            abort(403, 'Unauthorized');
+        }
+        
+        $supplier = $user->supplier;
+        if (!$supplier) {
+            return response()->json(['message' => 'Supplier profile not found'], 404);
+        }
+        
+        // Total sales (sum of wholesale_cost * quantity for paid orders)
+        $totalSales = OrderItem::where('supplier_id', $supplier->id)
+            ->whereHas('order', fn($q) => $q->where('payment_status', 'paid'))
+            ->sum(DB::raw('wholesale_cost * quantity'));
+        
+        // Monthly sales for last 12 months
+        $monthlySales = OrderItem::where('supplier_id', $supplier->id)
+            ->whereHas('order', fn($q) => $q->where('payment_status', 'paid'))
+            ->selectRaw("DATE_TRUNC('month', order_items.created_at) as month, SUM(wholesale_cost * quantity) as total")
+            ->groupBy('month')
+            ->orderBy('month', 'desc')
+            ->limit(12)
+            ->get()
+            ->map(fn($item) => [
+                'month' => $item->month,
+                'total' => round((float) $item->total, 2)
+            ]);
+        
+        // Recent paid orders – return distinct orders with aggregated supplier items
+        $recentOrders = Order::whereHas('items', fn($q) => $q->where('supplier_id', $supplier->id))
+            ->where('payment_status', 'paid')
+            ->with(['customer', 'items' => fn($q) => $q->where('supplier_id', $supplier->id)->with('product')])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function ($order) use ($supplier) {
+                $supplierItems = $order->items->filter(fn($item) => $item->supplier_id == $supplier->id);
+                $orderTotal = $supplierItems->sum(fn($item) => $item->wholesale_cost * $item->quantity);
+                return [
+                    'id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'created_at' => $order->created_at,
+                    'customer' => $order->customer,
+                    'items' => $supplierItems->values(),
+                    'total' => round($orderTotal, 2),
+                ];
+            });
+        
+        return response()->json([
+            'total_sales' => round((float) $totalSales, 2),
+            'monthly_sales' => $monthlySales,
+            'recent_orders' => $recentOrders,
+        ]);
     }
 
     /**

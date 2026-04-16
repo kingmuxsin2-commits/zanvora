@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\Admin\ReportController;
 use App\Http\Controllers\Api\V1\Admin\CommissionTierController;
 use App\Http\Controllers\Api\V1\Admin\CreditController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController;
+use App\Http\Controllers\Api\V1\Supplier\SupplierProfileController;
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -75,6 +76,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('products', SupplierProductController::class);
         Route::get('/orders', [OrderController::class, 'supplierOrders']);
         Route::put('/fulfillments/{fulfillment}', [FulfillmentController::class, 'update']);
+        Route::get('/earnings', [OrderController::class, 'earnings']);
+        Route::put('/settings', [SupplierController::class, 'updateSettings']);
+        Route::put('/settings', [SupplierProfileController::class, 'updateSettings']);
     });
 
     /*
@@ -95,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/orders/{order}/credits', [CreditController::class, 'store']);
         Route::get('/orders/{order}/credits', [CreditController::class, 'index']);
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
+        Route::get('/orders', [OrderController::class, 'index']);
 
         // Product Approval
         Route::get('/products/pending', [ProductApprovalController::class, 'index']);
