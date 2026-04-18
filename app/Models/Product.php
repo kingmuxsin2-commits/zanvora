@@ -21,6 +21,11 @@ class Product extends Model
         'variants' => 'array',
     ];
 
+    /**
+     * Append computed rating fields to the model's JSON form.
+     */
+    protected $appends = ['average_rating', 'total_reviews'];
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
@@ -32,7 +37,31 @@ class Product extends Model
     }
 
     /**
-     * Get the indexable data array for the model.
+     * Get all ratings for this product.
+     */
+    public function ratings(): HasMany
+    {
+        return $this->hasMany(Rating::class);
+    }
+
+    /**
+     * Calculate the average rating (rounded to 1 decimal).
+     */
+    public function getAverageRatingAttribute(): float
+    {
+        return round($this->ratings()->avg('rating') ?? 0, 1);
+    }
+
+    /**
+     * Get the total number of ratings.
+     */
+    public function getTotalReviewsAttribute(): int
+    {
+        return $this->ratings()->count();
+    }
+
+    /**
+     * Get the indexable data array for Meilisearch.
      */
     public function toSearchableArray(): array
     {

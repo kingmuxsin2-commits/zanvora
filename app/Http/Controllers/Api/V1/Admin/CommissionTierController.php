@@ -8,10 +8,13 @@ use App\Http\Controllers\Controller;
 
 class CommissionTierController extends Controller
 {
+    /**
+     * Ensure the user is an admin (staff not allowed).
+     */
     protected function ensureAdmin($user)
     {
-        if (!in_array($user->role, ['admin', 'staff'])) {
-            abort(403, 'Unauthorized');
+        if ($user->role !== 'admin') {
+            abort(403, 'Only administrators can manage commission tiers.');
         }
     }
 

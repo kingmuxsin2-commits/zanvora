@@ -10,10 +10,23 @@ use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
-    protected function ensureAdmin($user)
+    /**
+     * Ensure the user is admin or staff (for viewing).
+     */
+    protected function ensureAdminOrStaff($user)
     {
         if (!in_array($user->role, ['admin', 'staff'])) {
             abort(403, 'Unauthorized');
+        }
+    }
+
+    /**
+     * Ensure the user is strictly admin (for sensitive actions).
+     */
+    protected function ensureAdmin($user)
+    {
+        if ($user->role !== 'admin') {
+            abort(403, 'Only administrators can perform this action.');
         }
     }
 
@@ -22,7 +35,7 @@ class ReportController extends Controller
      */
     public function payoutReport(Request $request)
     {
-        $this->ensureAdmin($request->user());
+        $this->ensureAdminOrStaff($request->user());
 
         $request->validate([
             'start_date' => 'nullable|date',
@@ -62,7 +75,7 @@ class ReportController extends Controller
                     'email'           => $supplier->user->email,
                     'payment_details' => $supplier->payment_details,
                     'total_owed'      => round((float) $totalOwed, 2),
-                    'paid'            => $alreadyPaid,   // ✅ new field
+                    'paid'            => $alreadyPaid,
                 ];
             })
             ->filter(fn($s) => $s['total_owed'] > 0)
@@ -77,7 +90,7 @@ class ReportController extends Controller
     }
 
     /**
-     * Mark a supplier as paid (manual tracking).
+     * Mark a supplier as paid (manual tracking) – admin only.
      */
     public function markPaid(Request $request, Supplier $supplier)
     {

@@ -190,11 +190,14 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        $orders = Order::where('customer_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = Order::where('customer_id', $user->id)
+            ->orderBy('created_at', 'desc');
 
-        return response()->json($orders);
+        if ($request->has('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        return response()->json($query->get());
     }
 
     /**
@@ -318,6 +321,33 @@ class OrderController extends Controller
         return response()->json([
             'message' => 'Reference override saved.',
             'order' => $order->fresh(),
+        ]);
+    }
+
+    /**
+     * Customer confirms delivery.
+     */
+    public function confirmDelivery(Request $request, Order $order)
+    {
+        $user = $request->user();
+
+        if ($order->customer_id !== $user->id) {
+            abort(403, 'Unauthorized');
+        }
+
+        if ($order->status !== 'delivered') {
+            return response()->json(['message' => 'Order is not marked as delivered yet.'], 400);
+        }
+
+        if ($order->delivery_confirmed_at) {
+            return response()->json(['message' => 'Delivery already confirmed.'], 400);
+        }
+
+        $order->update(['delivery_confirmed_at' => now()]);
+
+        return response()->json([
+            'message' => 'Delivery confirmed. Thank you!',
+            'delivery_confirmed_at' => $order->delivery_confirmed_at,
         ]);
     }
 }

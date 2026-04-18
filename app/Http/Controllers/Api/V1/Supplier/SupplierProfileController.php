@@ -24,13 +24,8 @@ class SupplierProfileController extends Controller
         }
         
         $validated = $request->validate([
-            'business_name'    => 'required|string|max:255',
-            'address'          => 'required|string',
-            'shipping_flat_fee'=> 'nullable|numeric|min:0',
-            'payment_details'  => 'nullable|array',
-            'payment_details.paypal_email' => 'nullable|email',
-            'payment_details.venmo_handle' => 'nullable|string',
-            'payment_details.bank_details' => 'nullable|string',
+            'business_name' => 'required|string|max:255',
+            'address'       => 'required|string',
         ]);
         
         $supplier->update($validated);

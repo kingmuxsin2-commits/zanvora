@@ -19,6 +19,12 @@ use App\Http\Controllers\Api\V1\Admin\CommissionTierController;
 use App\Http\Controllers\Api\V1\Admin\CreditController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController;
 use App\Http\Controllers\Api\V1\Supplier\SupplierProfileController;
+use App\Http\Controllers\Api\V1\Admin\AdminUserController;
+use App\Http\Controllers\Api\V1\Admin\AnalyticsController;
+use App\Http\Controllers\Api\V1\RatingController;
+use App\Http\Controllers\Api\V1\Supplier\SupplierAnalyticsController;
+use App\Http\Controllers\Api\V1\Admin\FulfillmentController as AdminFulfillmentController;
+
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -56,7 +62,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/my-orders', [OrderController::class, 'myOrders']);
     Route::get('/me', [AuthController::class, 'me']);
-    Route::get('/orders', [OrderController::class, 'supplierOrders']);
+    Route::post('/orders/{order}/confirm-delivery', [OrderController::class, 'confirmDelivery']);
+    Route::post('/products/{product}/rate', [RatingController::class, 'store']);
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
@@ -65,7 +72,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::post('/orders/{order}/claim-payment', [OrderController::class, 'claimPayment']);
-    Route::put('/fulfillments/{fulfillment}', [FulfillmentController::class, 'update']);
 
     /*
     |----------------------------------------------------------------------
@@ -77,8 +83,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/orders', [OrderController::class, 'supplierOrders']);
         Route::put('/fulfillments/{fulfillment}', [FulfillmentController::class, 'update']);
         Route::get('/earnings', [OrderController::class, 'earnings']);
-        Route::put('/settings', [SupplierController::class, 'updateSettings']);
         Route::put('/settings', [SupplierProfileController::class, 'updateSettings']);
+        Route::get('/analytics', [SupplierAnalyticsController::class, 'index']);
     });
 
     /*
@@ -100,6 +106,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/orders/{order}/credits', [CreditController::class, 'index']);
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
         Route::get('/orders', [OrderController::class, 'index']);
+        Route::apiResource('admin-users', AdminUserController::class);
+        Route::post('/fulfillments/{fulfillment}/deliver', [AdminFulfillmentController::class, 'markDelivered']);
+
+        // Analytics
+        Route::get('/analytics', [AnalyticsController::class, 'index']);
+        Route::get('/analytics/rfm', [AnalyticsController::class, 'rfmAnalysis']);
+        Route::get('/analytics/ltv-distribution', [AnalyticsController::class, 'ltvDistribution']);
+        Route::get('/analytics/products', [AnalyticsController::class, 'productAnalytics']);
+        Route::get('/analytics/suppliers', [AnalyticsController::class, 'supplierAnalytics']);
+        Route::get('/analytics/cohort-retention', [AnalyticsController::class, 'cohortRetention']);
+        Route::get('/analytics/suppliers/cohort', [AnalyticsController::class, 'supplierCohortRetention']);
+        Route::get('/analytics/suppliers/arps', [AnalyticsController::class, 'arpsTrend']);
+        Route::get('/analytics/suppliers/concentration', [AnalyticsController::class, 'revenueConcentration']);
+        Route::get('/analytics/suppliers/churn', [AnalyticsController::class, 'supplierChurn']);
 
         // Product Approval
         Route::get('/products/pending', [ProductApprovalController::class, 'index']);
