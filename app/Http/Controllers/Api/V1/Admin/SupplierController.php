@@ -8,6 +8,13 @@ use App\Http\Controllers\Controller;
 
 class SupplierController extends Controller
 {
+    protected function ensureAdmin()
+    {
+        if (!auth()->user() || !in_array(auth()->user()->role, ['admin', 'staff'])) {
+            abort(403, 'Unauthorized');
+        }
+    }
+
     public function index()
     {
         $this->ensureAdmin();
@@ -37,15 +44,21 @@ class SupplierController extends Controller
         $this->ensureAdmin();
         
         // Optionally delete or keep as unapproved
-        // $supplier->delete();
         
         return response()->json(['message' => 'Supplier rejected']);
     }
 
-    protected function ensureAdmin()
+    /**
+     * Get all suppliers (for filter dropdowns).
+     */
+    public function allSuppliers(Request $request)
     {
-        if (!auth()->user() || !in_array(auth()->user()->role, ['admin', 'staff'])) {
-            abort(403, 'Unauthorized');
-        }
+        $this->ensureAdmin();
+
+        $suppliers = Supplier::select('id', 'business_name')
+            ->orderBy('business_name')
+            ->get();
+
+        return response()->json($suppliers);
     }
 }

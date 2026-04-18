@@ -12,8 +12,16 @@ class Product extends Model
     use Searchable;
 
     protected $fillable = [
-        'supplier_id', 'title', 'description', 'wholesale_price',
-        'retail_price', 'stock_qty', 'images', 'variants', 'status'
+        'supplier_id',
+        'title',
+        'description',
+        'wholesale_price',
+        'retail_price',
+        'stock_qty',
+        'images',
+        'video_url',        
+        'variants',
+        'status'
     ];
 
     protected $casts = [

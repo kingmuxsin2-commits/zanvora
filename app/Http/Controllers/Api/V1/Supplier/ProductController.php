@@ -110,7 +110,8 @@ class ProductController extends Controller
             'images' => 'nullable|array|max:5',
             'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
             'variants' => 'nullable|array',
-            'status' => 'sometimes|in:draft,pending_review,paused',
+            'status' => 'sometimes|in:draft,pending_review,active,paused',
+            'existing_images' => 'nullable|string',
         ]);
 
         // Recalculate retail price if wholesale price changed
@@ -126,23 +127,31 @@ class ProductController extends Controller
             }
         }
 
-        // Handle image replacements if provided
-        if ($request->hasFile('images')) {
-            $imagePaths = [];
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('products', 'public');
-                $imagePaths[] = Storage::url($path);
+        // Process kept existing images
+        if ($request->has('existing_images')) {
+            $keptImages = json_decode($request->existing_images, true) ?? [];
+            // Delete images that are no longer kept
+            foreach ($product->images as $oldImage) {
+                if (!in_array($oldImage, $keptImages)) {
+                    $path = str_replace('/storage/', '', $oldImage);
+                    Storage::disk('public')->delete($path);
+                }
             }
-            $validated['images'] = $imagePaths;
-            
-            // Optionally delete old images from storage
-            foreach ($product->images ?? [] as $oldImage) {
-                $path = str_replace('/storage/', '', $oldImage);
-                Storage::disk('public')->delete($path);
-            }
+            $product->images = $keptImages;
         }
 
-        $product->update($validated);
+        // Handle new image uploads
+        if ($request->hasFile('images')) {
+            $newImages = [];
+            foreach ($request->file('images') as $image) {
+                $path = $image->store('products', 'public');
+                $newImages[] = Storage::url($path);
+            }
+            $product->images = array_merge($product->images ?? [], $newImages);
+        }
+
+        $product->fill($validated);
+        $product->save();
 
         return response()->json($product);
     }

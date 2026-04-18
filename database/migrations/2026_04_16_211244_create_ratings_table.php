@@ -11,16 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('ratings', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('customer_id')->constrained('users')->cascadeOnDelete();
-            $table->tinyInteger('rating')->unsigned()->comment('1-5 stars');
-            $table->text('review')->nullable();
-            $table->timestamps();
-
-            // Ensure a customer can only rate a product once
-            $table->unique(['product_id', 'customer_id']);
+        Schema::table('ratings', function (Blueprint $table) {
+            $table->string('image')->nullable()->after('review');
         });
     }
 
@@ -29,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('ratings');
+        Schema::table('ratings', function (Blueprint $table) {
+            $table->dropColumn('image');
+        });
     }
 };

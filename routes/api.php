@@ -106,7 +106,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/orders/{order}/credits', [CreditController::class, 'index']);
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
         Route::get('/orders', [OrderController::class, 'index']);
+        Route::get('/suppliers/all', [SupplierController::class, 'allSuppliers']);
         Route::apiResource('admin-users', AdminUserController::class);
+        Route::post('/products/bulk-reject', [ProductApprovalController::class, 'bulkReject']);
+        Route::post('/products/bulk-approve', [ProductApprovalController::class, 'bulkApprove']);
         Route::post('/fulfillments/{fulfillment}/deliver', [AdminFulfillmentController::class, 'markDelivered']);
 
         // Analytics

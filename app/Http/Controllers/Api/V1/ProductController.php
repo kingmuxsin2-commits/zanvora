@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Product;
+use App\Models\OrderItem;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
@@ -74,7 +75,19 @@ class ProductController extends Controller
             return response()->json(['message' => 'Product not found'], 404);
         }
 
-        $product->load('supplier');
+        $product->load([
+            'supplier',
+            'ratings' => function ($query) {
+                $query->with('customer:id,name')->latest()->limit(20);
+            },
+        ]);
+
+        // ✅ Attach a `verified_purchase` flag to each rating
+        $product->ratings->each(function ($rating) {
+            $rating->verified_purchase = OrderItem::where('product_id', $rating->product_id)
+                ->whereHas('order', fn($q) => $q->where('customer_id', $rating->customer_id)->where('payment_status', 'paid'))
+                ->exists();
+        });
 
         return response()->json($product);
     }
