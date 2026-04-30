@@ -19,9 +19,12 @@ use App\Http\Controllers\Api\V1\Admin\CommissionTierController;
 use App\Http\Controllers\Api\V1\Admin\CreditController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController;
 use App\Http\Controllers\Api\V1\Supplier\SupplierProfileController;
+use App\Http\Controllers\Api\V1\Supplier\InventoryItemController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
 use App\Http\Controllers\Api\V1\Admin\AnalyticsController;
 use App\Http\Controllers\Api\V1\RatingController;
+use App\Http\Controllers\Api\V1\Supplier\InventoryTransactionController;
+use App\Http\Controllers\Api\V1\Admin\RevenueController;
 use App\Http\Controllers\Api\V1\Supplier\SupplierAnalyticsController;
 use App\Http\Controllers\Api\V1\Admin\FulfillmentController as AdminFulfillmentController;
 
@@ -81,8 +84,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('supplier')->group(function () {
         Route::apiResource('products', SupplierProductController::class);
         Route::get('/orders', [OrderController::class, 'supplierOrders']);
+        Route::put('/products/{product}/stock', [ProductController::class, 'updateStock']);
         Route::put('/fulfillments/{fulfillment}', [FulfillmentController::class, 'update']);
         Route::get('/earnings', [OrderController::class, 'earnings']);
+        Route::get('/inventory/transactions', [InventoryTransactionController::class, 'index']);
+        Route::post('/inventory/transactions', [InventoryTransactionController::class, 'store']);
+        Route::delete('/inventory/transactions/{transaction}', [InventoryTransactionController::class, 'destroy']);
+        Route::get('/inventory/stock-summary', [InventoryTransactionController::class, 'stockSummary']);
+        Route::apiResource('inventory-items', InventoryItemController::class)->only(['index', 'store', 'destroy']);
+        Route::get('/inventory', [SupplierProductController::class, 'inventory']);
         Route::put('/settings', [SupplierProfileController::class, 'updateSettings']);
         Route::get('/analytics', [SupplierAnalyticsController::class, 'index']);
     });
@@ -105,7 +115,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/orders/{order}/credits', [CreditController::class, 'store']);
         Route::get('/orders/{order}/credits', [CreditController::class, 'index']);
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
+        Route::post('/suppliers', [SupplierController::class, 'store']);
+        Route::get('/analytics/inventory', [AnalyticsController::class, 'inventoryAnalytics']);
+        Route::post('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus']);
         Route::get('/orders', [OrderController::class, 'index']);
+        Route::get('/revenue/platform', [RevenueController::class, 'index']);
+        Route::get('/revenue/supplier-breakdown', [RevenueController::class, 'supplierBreakdown']);
         Route::get('/suppliers/all', [SupplierController::class, 'allSuppliers']);
         Route::apiResource('admin-users', AdminUserController::class);
         Route::post('/products/bulk-reject', [ProductApprovalController::class, 'bulkReject']);

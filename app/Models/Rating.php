@@ -17,7 +17,7 @@ class Rating extends Model
         'customer_id',
         'rating',
         'review',
-        'image',        // ✅ new field
+        'image',        
     ];
 
     /**

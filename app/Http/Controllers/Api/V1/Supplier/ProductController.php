@@ -7,31 +7,40 @@ use App\Models\CommissionTier;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
-    use AuthorizesRequests;
-
+    // 1. List products with search & sort
     public function index(Request $request)
     {
         $supplier = $request->user()->supplier;
-        
         if (!$supplier) {
             return response()->json(['message' => 'Supplier profile not found'], 404);
         }
 
-        $products = Product::where('supplier_id', $supplier->id)
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+        $query = Product::where('supplier_id', $supplier->id);
 
-        return response()->json($products);
+        if ($request->filled('search')) {
+            $query->where('title', 'like', '%' . $request->search . '%');
+        }
+
+        $sort = $request->get('sort', 'created_at');
+        $order = $request->get('order', 'desc');
+        $allowed = ['title', 'wholesale_price', 'retail_price', 'stock_qty', 'created_at'];
+        if (in_array($sort, $allowed)) {
+            $query->orderBy($sort, $order);
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
+
+        return response()->json($query->paginate($request->get('per_page', 20)));
     }
 
+    // 2. Store
     public function store(Request $request)
     {
         $supplier = $request->user()->supplier;
-        
         if (!$supplier) {
             return response()->json(['message' => 'Supplier profile not found'], 404);
         }
@@ -47,7 +56,6 @@ class ProductController extends Controller
             'variants' => 'nullable|array',
         ]);
 
-        // Calculate retail price based on commission tiers
         $wholesalePrice = $validated['wholesale_price'];
         $commissionTier = CommissionTier::where('min_price', '<=', $wholesalePrice)
             ->where('max_price', '>=', $wholesalePrice)
@@ -59,7 +67,6 @@ class ProductController extends Controller
             $retailPrice = $wholesalePrice * (1 + $commissionTier->percentage / 100);
         }
 
-        // Handle image uploads
         $imagePaths = [];
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
@@ -77,27 +84,26 @@ class ProductController extends Controller
             'stock_qty' => $validated['stock_qty'],
             'images' => $imagePaths,
             'variants' => $validated['variants'] ?? null,
-            'status' => 'pending_review', // All new products require admin approval
+            'status' => 'pending_review',
         ]);
 
         return response()->json($product, 201);
     }
 
+    // 3. Show
     public function show(Request $request, Product $product)
     {
         $supplier = $request->user()->supplier;
-        
         if (!$supplier || $product->supplier_id !== $supplier->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-
         return response()->json($product);
     }
 
+    // 4. Update (with image handling)
     public function update(Request $request, Product $product)
     {
         $supplier = $request->user()->supplier;
-        
         if (!$supplier || $product->supplier_id !== $supplier->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -114,23 +120,19 @@ class ProductController extends Controller
             'existing_images' => 'nullable|string',
         ]);
 
-        // Recalculate retail price if wholesale price changed
         if (isset($validated['wholesale_price'])) {
             $commissionTier = CommissionTier::where('min_price', '<=', $validated['wholesale_price'])
                 ->where('max_price', '>=', $validated['wholesale_price'])
                 ->where('is_active', true)
                 ->first();
-
             $validated['retail_price'] = $validated['wholesale_price'];
             if ($commissionTier) {
                 $validated['retail_price'] = $validated['wholesale_price'] * (1 + $commissionTier->percentage / 100);
             }
         }
 
-        // Process kept existing images
         if ($request->has('existing_images')) {
             $keptImages = json_decode($request->existing_images, true) ?? [];
-            // Delete images that are no longer kept
             foreach ($product->images as $oldImage) {
                 if (!in_array($oldImage, $keptImages)) {
                     $path = str_replace('/storage/', '', $oldImage);
@@ -140,7 +142,6 @@ class ProductController extends Controller
             $product->images = $keptImages;
         }
 
-        // Handle new image uploads
         if ($request->hasFile('images')) {
             $newImages = [];
             foreach ($request->file('images') as $image) {
@@ -156,22 +157,68 @@ class ProductController extends Controller
         return response()->json($product);
     }
 
+    // 5. Update stock only
+    public function updateStock(Request $request, Product $product)
+    {
+        $supplier = $request->user()->supplier;
+        if (!$supplier || $product->supplier_id !== $supplier->id) {
+            abort(403, 'Unauthorized');
+        }
+
+        $validated = $request->validate([
+            'stock_qty' => 'required|integer|min:0',
+        ]);
+        $product->update(['stock_qty' => $validated['stock_qty']]);
+        return response()->json(['message' => 'Stock updated', 'stock_qty' => $product->stock_qty]);
+    }
+
+    // 6. Delete
     public function destroy(Request $request, Product $product)
     {
         $supplier = $request->user()->supplier;
-        
         if (!$supplier || $product->supplier_id !== $supplier->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Delete associated images
         foreach ($product->images ?? [] as $image) {
             $path = str_replace('/storage/', '', $image);
             Storage::disk('public')->delete($path);
         }
-
         $product->delete();
-
         return response()->json(['message' => 'Product deleted']);
+    }
+
+    // 7. Inventory overview (ERP‑style spreadsheet)
+    public function inventory(Request $request)
+    {
+        $supplier = $request->user()->supplier;
+        if (!$supplier) {
+            return response()->json(['message' => 'Supplier profile not found'], 404);
+        }
+
+        $query = Product::where('supplier_id', $supplier->id)
+            ->withCount(['orderItems as sales_count' => function ($q) {
+                $q->whereHas('order', fn($o) => $o->where('payment_status', 'paid'));
+            }])
+            ->withSum(['orderItems as total_revenue' => function ($q) {
+                $q->whereHas('order', fn($o) => $o->where('payment_status', 'paid'));
+            }], DB::raw('COALESCE(wholesale_cost * quantity, 0)'))
+            ->withMax(['orderItems as last_sale_date' => function ($q) {
+                $q->whereHas('order', fn($o) => $o->where('payment_status', 'paid'));
+            }], 'created_at');
+
+        if ($request->filled('search')) {
+            $query->where('title', 'like', '%' . $request->search . '%');
+        }
+
+        $sort = $request->get('sort', 'created_at');
+        $order = $request->get('order', 'desc');
+        $allowed = ['title', 'wholesale_price', 'retail_price', 'stock_qty',
+                     'sales_count', 'total_revenue', 'last_sale_date', 'created_at'];
+        if (in_array($sort, $allowed)) {
+            $query->orderBy($sort, $order);
+        }
+
+        return response()->json($query->paginate(15));
     }
 }

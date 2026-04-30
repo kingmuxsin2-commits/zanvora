@@ -15,35 +15,26 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'phone' => 'required|string|max:20',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|max:255|unique:users',
+            'phone'    => 'required|string|max:20',
             'password' => ['required', 'confirmed', Password::defaults()],
-            'role' => 'required|in:customer,supplier',
-            'business_name' => 'required_if:role,supplier|string|max:255',
-            'address' => 'required_if:role,supplier|string',
+            'role'     => 'required|in:customer',                // ✅ only customer allowed
         ]);
 
+        // Remove supplier‑specific fields from validated data (they won't exist anyway)
         $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'],
+            'name'     => $validated['name'],
+            'email'    => $validated['email'],
+            'phone'    => $validated['phone'],
             'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
+            'role'     => $validated['role'],
         ]);
-
-        if ($validated['role'] === 'supplier') {
-            $user->supplier()->create([
-                'business_name' => $validated['business_name'],
-                'address' => $validated['address'],
-                'is_approved' => false, // Requires admin approval
-            ]);
-        }
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'user' => $user->load('supplier'),
+            'user'  => $user,
             'token' => $token,
         ], 201);
     }
@@ -51,7 +42,7 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
+            'email'    => 'required|email',
             'password' => 'required',
         ]);
 
@@ -61,11 +52,11 @@ class AuthController extends Controller
             ]);
         }
 
-        $user = User::where('email', $request->email)->first();
+        $user  = User::where('email', $request->email)->first();
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'user' => $user->load('supplier'),
+            'user'  => $user->load('supplier'),
             'token' => $token,
         ]);
     }

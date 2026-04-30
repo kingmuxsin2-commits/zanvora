@@ -23,15 +23,16 @@ class OrderController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'shipping_address' => 'required|array',
-            'shipping_address.name' => 'required|string',
-            'shipping_address.phone' => 'required|string',
-            'shipping_address.address' => 'required|string',
-            'shipping_address.city' => 'required|string',
+            'shipping_address'          => 'required|array',
+            'shipping_address.name'     => 'required|string',
+            'shipping_address.phone'    => 'required|string',
+            'shipping_address.address'  => 'required|string',
+            'shipping_address.city'     => 'required|string',
             'shipping_address.postal_code' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'items'                     => 'required|array|min:1',
+            'items.*.product_id'        => 'required|exists:products,id',
+            'items.*.quantity'          => 'required|integer|min:1',
+            'total_amount'              => 'sometimes|numeric|min:0',   // ← optional field for SLSH amount
         ]);
 
         DB::beginTransaction();
@@ -53,43 +54,46 @@ class OrderController extends Controller
                 $totalAmount += $product->retail_price * $itemData['quantity'];
 
                 $items[] = [
-                    'product' => $product,
+                    'product'  => $product,
                     'quantity' => $itemData['quantity'],
                 ];
             }
 
+            // Use the frontend‑supplied total if present, otherwise the computed USD total
+            $frontendTotal = $validated['total_amount'] ?? null;
+
             $order = Order::create([
-                'order_number' => $orderNumber,
-                'customer_id' => $user->id,
-                'total_amount' => $totalAmount,
+                'order_number'   => $orderNumber,
+                'customer_id'    => $user->id,
+                'total_amount'   => $frontendTotal ?? $totalAmount,   // ← SLSH amount takes priority
                 'shipping_address' => $validated['shipping_address'],
-                'status' => 'pending_payment',
+                'status'         => 'pending_payment',
                 'payment_method' => 'mobile_money',
                 'payment_reference' => $orderNumber,
-                'payment_phone' => $validated['shipping_address']['phone'],
+                'payment_phone'  => $validated['shipping_address']['phone'],
                 'payment_status' => 'pending_manual',
             ]);
 
             foreach ($items as $item) {
-                $product = $item['product'];
+                $product  = $item['product'];
                 $quantity = $item['quantity'];
 
                 $product->decrement('stock_qty', $quantity);
 
                 OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $product->id,
-                    'quantity' => $quantity,
-                    'unit_price' => $product->retail_price,
-                    'wholesale_cost' => $product->wholesale_price,
-                    'supplier_id' => $product->supplier_id,
+                    'order_id'          => $order->id,
+                    'product_id'        => $product->id,
+                    'quantity'          => $quantity,
+                    'unit_price'        => $product->retail_price,
+                    'wholesale_cost'    => $product->wholesale_price,
+                    'supplier_id'       => $product->supplier_id,
                     'commission_earned' => $product->retail_price - $product->wholesale_price,
                 ]);
 
                 Fulfillment::create([
-                    'order_id' => $order->id,
-                    'supplier_id' => $product->supplier_id,
-                    'status' => 'awaiting_payment',
+                    'order_id'      => $order->id,
+                    'supplier_id'   => $product->supplier_id,
+                    'status'        => 'awaiting_payment',
                     'shipping_cost' => $product->supplier->shipping_flat_fee ?? 0,
                 ]);
             }
@@ -143,12 +147,10 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        // Customers can only view their own orders
         if ($user->role === 'customer' && $order->customer_id !== $user->id) {
             abort(403);
         }
 
-        // Suppliers can view orders containing their items
         if ($user->role === 'supplier') {
             $hasItems = $order->items()->where('supplier_id', $user->supplier->id)->exists();
             if (!$hasItems) {
@@ -174,7 +176,6 @@ class OrderController extends Controller
             return response()->json(['message' => 'Payment already processed'], 400);
         }
 
-        // Send email to admin
         Mail::to(config('mail.admin_address', env('ADMIN_EMAIL')))
             ->send(new PaymentClaimed($order));
 
@@ -216,7 +217,6 @@ class OrderController extends Controller
             return response()->json(['message' => 'Supplier profile not found'], 404);
         }
 
-        // Get fulfillments that are pending and belong to this supplier
         $fulfillments = Fulfillment::with([
                 'order' => function ($query) {
                     $query->select('id', 'order_number', 'customer_id', 'shipping_address', 'status');
@@ -256,12 +256,10 @@ class OrderController extends Controller
             return response()->json(['message' => 'Supplier profile not found'], 404);
         }
         
-        // Total sales (sum of wholesale_cost * quantity for paid orders)
         $totalSales = OrderItem::where('supplier_id', $supplier->id)
             ->whereHas('order', fn($q) => $q->where('payment_status', 'paid'))
             ->sum(DB::raw('wholesale_cost * quantity'));
         
-        // Monthly sales for last 12 months
         $monthlySales = OrderItem::where('supplier_id', $supplier->id)
             ->whereHas('order', fn($q) => $q->where('payment_status', 'paid'))
             ->selectRaw("DATE_TRUNC('month', order_items.created_at) as month, SUM(wholesale_cost * quantity) as total")
@@ -274,7 +272,6 @@ class OrderController extends Controller
                 'total' => round((float) $item->total, 2)
             ]);
         
-        // Recent paid orders – return distinct orders with aggregated supplier items
         $recentOrders = Order::whereHas('items', fn($q) => $q->where('supplier_id', $supplier->id))
             ->where('payment_status', 'paid')
             ->with(['customer', 'items' => fn($q) => $q->where('supplier_id', $supplier->id)->with('product')])

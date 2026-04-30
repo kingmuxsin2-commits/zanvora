@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Models\User;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\InventoryTransaction;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
@@ -550,6 +551,85 @@ class AnalyticsController extends Controller
             'price_buckets'    => $priceBuckets,
             'monthly_products' => $monthlyProducts,
             'monthly_sales'    => $monthlySales,
+        ]);
+    }
+
+    // ---------- INVENTORY ANALYTICS (NEW) ----------
+    public function inventoryAnalytics(Request $request)
+    {
+        $this->ensureAdmin($request->user());
+
+        $supplierId = $request->get('supplier_id');
+        $startDate = $request->get('start_date', now()->subDays(30)->toDateString());
+        $endDate   = $request->get('end_date', now()->toDateString());
+
+        // Base query for transactions within date range
+        $query = InventoryTransaction::whereBetween('transaction_date', [$startDate, $endDate]);
+
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
+        }
+
+        // 1. Summary stats
+        $totalTransactions = (clone $query)->count();
+        $totalSuppliers    = (clone $query)->distinct('supplier_id')->count('supplier_id');
+        $totalBuyValue     = (clone $query)->where('type', 'purchase')->sum(DB::raw('price * quantity'));
+        $totalSellValue    = (clone $query)->where('type', 'sale')->sum(DB::raw('price * quantity'));
+        $avgMargin = $totalSellValue - $totalBuyValue;
+
+        // 2. Daily trend (last 30 days)
+        $dailyTrend = InventoryTransaction::whereBetween('transaction_date', [$startDate, $endDate])
+            ->when($supplierId, fn($q) => $q->where('supplier_id', $supplierId))
+            ->select(
+                DB::raw('DATE(transaction_date) as date'),
+                DB::raw('COUNT(*) as count')
+            )
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->map(fn($r) => ['date' => $r->date, 'count' => (int)$r->count]);
+
+        // 3. Per‑supplier breakdown
+        $supplierBreakdown = InventoryTransaction::whereBetween('transaction_date', [$startDate, $endDate])
+            ->when($supplierId, fn($q) => $q->where('supplier_id', $supplierId))
+            ->with('supplier:id,business_name')
+            ->get()
+            ->groupBy('supplier_id')
+            ->map(function ($transactions, $supplierId) {
+                $supplier = $transactions->first()->supplier;
+                $purchase = $transactions->where('type', 'purchase');
+                $sale     = $transactions->where('type', 'sale');
+                $totalBuy  = $purchase->sum(fn($t) => $t->price * $t->quantity);
+                $totalSell = $sale->sum(fn($t) => $t->price * $t->quantity);
+                return [
+                    'supplier_id'    => $supplierId,
+                    'business_name'  => $supplier->business_name ?? 'Unknown',
+                    'transaction_count' => $transactions->count(),
+                    'last_activity'  => $transactions->max('transaction_date'),
+                    'total_buy_value'   => round($totalBuy, 2),
+                    'total_sell_value'  => round($totalSell, 2),
+                    'margin'         => round($totalSell - $totalBuy, 2),
+                ];
+            })
+            ->values();
+
+        // 4. Frequency analysis (average transactions per day per supplier)
+        $daysDiff = max(1, now()->parse($startDate)->diffInDays($endDate) ?: 1);
+        $freqAnalysis = $supplierBreakdown->map(function ($supplier) use ($daysDiff) {
+            $supplier['avg_transactions_per_day'] = round($supplier['transaction_count'] / $daysDiff, 1);
+            return $supplier;
+        });
+
+        return response()->json([
+            'summary' => [
+                'total_transactions' => $totalTransactions,
+                'total_suppliers'    => $totalSuppliers,
+                'total_buy_value'    => round($totalBuyValue, 2),
+                'total_sell_value'   => round($totalSellValue, 2),
+                'avg_margin'         => round($avgMargin, 2),
+            ],
+            'daily_trend'        => $dailyTrend,
+            'supplier_breakdown' => $freqAnalysis,
         ]);
     }
 
