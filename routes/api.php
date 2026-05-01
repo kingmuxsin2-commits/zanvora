@@ -11,9 +11,11 @@ use App\Http\Controllers\Api\V1\Supplier\ProductController as SupplierProductCon
 use App\Http\Controllers\Api\V1\Admin\ProductApprovalController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\Admin\AdminControlsController;
 use App\Http\Controllers\Api\V1\Admin\PaymentVerificationController;
 use Laravel\Sanctum\Http\Controllers\CsrfCookieController;
 use App\Http\Controllers\Api\V1\Supplier\FulfillmentController;
+use App\Http\Controllers\Api\V1\Admin\LocationController;
 use App\Http\Controllers\Api\V1\Admin\ReportController;
 use App\Http\Controllers\Api\V1\Admin\CommissionTierController;
 use App\Http\Controllers\Api\V1\Admin\CreditController;
@@ -22,6 +24,7 @@ use App\Http\Controllers\Api\V1\Supplier\SupplierProfileController;
 use App\Http\Controllers\Api\V1\Supplier\InventoryItemController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
 use App\Http\Controllers\Api\V1\Admin\AnalyticsController;
+use App\Http\Controllers\Api\V1\Admin\DeliveryFeeController;
 use App\Http\Controllers\Api\V1\RatingController;
 use App\Http\Controllers\Api\V1\Supplier\InventoryTransactionController;
 use App\Http\Controllers\Api\V1\Admin\RevenueController;
@@ -53,6 +56,7 @@ Route::post('/magic-link/verify', [MagicLinkController::class, 'verify']);
 // Public Products
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{product}', [ProductController::class, 'show']);
+Route::get('/delivery-fee', [DeliveryFeeController::class, 'show']);
 
 /*
 |--------------------------------------------------------------------------
@@ -109,13 +113,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/suppliers/{supplier}/approve', [SupplierController::class, 'approve']);
         Route::post('/suppliers/{supplier}/reject', [SupplierController::class, 'reject']);
         Route::get('/reports/payout', [ReportController::class, 'payoutReport']);
+        Route::apiResource('delivery-fees', DeliveryFeeController::class);
+        Route::get('/location/customers', [LocationController::class, 'index']);
+        Route::post('/location/customers/{user}/gps', [LocationController::class, 'updateGps']);
         Route::post('/suppliers/{supplier}/mark-paid', [ReportController::class, 'markPaid']);
         Route::post('/orders/{order}/payment-reference', [OrderController::class, 'updatePaymentReference']);
         Route::apiResource('commission-tiers', CommissionTierController::class);
         Route::post('/orders/{order}/credits', [CreditController::class, 'store']);
+        Route::post('/controls/users/{user}/reset-password', [AdminControlsController::class, 'resetPassword']);
+        Route::get('/controls/customers', [AdminControlsController::class, 'customers']);
+        Route::get('/controls/suppliers', [AdminControlsController::class, 'suppliers']);
+        Route::post('/controls/users/{user}/toggle-active', [AdminControlsController::class, 'toggleUserActive']);
+        Route::post('/controls/suppliers/{supplier}/toggle-status', [AdminControlsController::class, 'toggleSupplierStatus']);
         Route::get('/orders/{order}/credits', [CreditController::class, 'index']);
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
         Route::post('/suppliers', [SupplierController::class, 'store']);
+        Route::get('/controls/customers', [AdminControlsController::class, 'customers']);
+        Route::get('/controls/suppliers', [AdminControlsController::class, 'suppliers']);
+        Route::post('/controls/users/{user}/toggle-active', [AdminControlsController::class, 'toggleUserActive']);
+        Route::post('/controls/suppliers/{supplier}/toggle-status', [AdminControlsController::class, 'toggleSupplierStatus']);
         Route::get('/analytics/inventory', [AnalyticsController::class, 'inventoryAnalytics']);
         Route::post('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus']);
         Route::get('/orders', [OrderController::class, 'index']);
