@@ -23,16 +23,18 @@ class OrderController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'shipping_address'          => 'required|array',
-            'shipping_address.name'     => 'required|string',
-            'shipping_address.phone'    => 'required|string',
-            'shipping_address.address'  => 'required|string',
-            'shipping_address.city'     => 'nullable|string',
-            'shipping_address.postal_code' => 'nullable|string',
-            'items'                     => 'required|array|min:1',
-            'items.*.product_id'        => 'required|exists:products,id',
-            'items.*.quantity'          => 'required|integer|min:1',
-            'total_amount'              => 'sometimes|numeric|min:0',   // ← optional field for SLSH amount
+            'shipping_address'            => 'required|array',
+            'shipping_address.name'       => 'required|string',
+            'shipping_address.phone'      => 'required|string',
+            'shipping_address.address'    => 'required|string',
+            'shipping_address.landmark'   => 'nullable|string|max:255',
+            'shipping_address.city'       => 'nullable|string',
+            'shipping_address.postal_code'=> 'nullable|string',
+            'items'                       => 'required|array|min:1',
+            'items.*.product_id'          => 'required|exists:products,id',
+            'items.*.quantity'            => 'required|integer|min:1',
+            'total_amount'                => 'sometimes|numeric|min:0',
+            'delivery_fee_slsh'           => 'nullable|numeric|min:0',
         ]);
 
         DB::beginTransaction();
@@ -59,19 +61,22 @@ class OrderController extends Controller
                 ];
             }
 
-            // Use the frontend‑supplied total if present, otherwise the computed USD total
+            // Add delivery fee (in SLSH) to total
+            $deliveryFee = $validated['delivery_fee_slsh'] ?? 0;
+            $totalAmount += $deliveryFee;
+
             $frontendTotal = $validated['total_amount'] ?? null;
 
             $order = Order::create([
-                'order_number'   => $orderNumber,
-                'customer_id'    => $user->id,
-                'total_amount'   => $frontendTotal ?? $totalAmount,   // ← SLSH amount takes priority
-                'shipping_address' => $validated['shipping_address'],
-                'status'         => 'pending_payment',
-                'payment_method' => 'mobile_money',
-                'payment_reference' => $orderNumber,
-                'payment_phone'  => $validated['shipping_address']['phone'],
-                'payment_status' => 'pending_manual',
+                'order_number'    => $orderNumber,
+                'customer_id'     => $user->id,
+                'total_amount'    => $frontendTotal ?? $totalAmount,
+                'shipping_address'=> $validated['shipping_address'],
+                'status'          => 'pending_payment',
+                'payment_method'  => 'mobile_money',
+                'payment_reference'=> $orderNumber,
+                'payment_phone'   => $validated['shipping_address']['phone'],
+                'payment_status'  => 'pending_manual',
             ]);
 
             foreach ($items as $item) {
@@ -346,5 +351,34 @@ class OrderController extends Controller
             'message' => 'Delivery confirmed. Thank you!',
             'delivery_confirmed_at' => $order->delivery_confirmed_at,
         ]);
+    }
+
+    /**
+     * Delivery list for admin: paid orders grouped by supplier.
+     * Accepts optional ?date=YYYY-MM-DD to filter by payment_confirmed_at.
+     */
+    public function deliveryList(Request $request)
+    {
+        $user = $request->user();
+        if (!in_array($user->role, ['admin', 'staff'])) {
+            abort(403, 'Unauthorized');
+        }
+
+        $date = $request->get('date');
+
+        $query = Order::with([
+            'items.product.supplier',
+            'customer',
+            'fulfillments.supplier',
+        ])
+        ->where('payment_status', 'paid');
+
+        if ($date) {
+            $query->whereDate('payment_confirmed_at', $date);
+        }
+
+        $orders = $query->orderBy('created_at', 'desc')->get();
+
+        return response()->json($orders);
     }
 }

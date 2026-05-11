@@ -33,8 +33,8 @@ class FulfillmentController extends Controller
             abort(403, 'Unauthorized');
         }
 
-        // Ensure fulfillment is in 'pending' status
-        if ($fulfillment->status !== 'pending') {
+        // ✅ Allow re‑shipping: accept both 'pending' and 'shipped' statuses
+        if (!in_array($fulfillment->status, ['pending', 'shipped'])) {
             return response()->json(['message' => 'Fulfillment cannot be marked as shipped'], 400);
         }
 

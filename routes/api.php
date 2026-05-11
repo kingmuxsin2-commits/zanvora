@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\V1\Admin\SupplierController;
 use App\Http\Controllers\Api\V1\Supplier\ProductController as SupplierProductController;
 use App\Http\Controllers\Api\V1\Admin\ProductApprovalController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\DegmoController;
+use App\Http\Controllers\Api\V1\XaafadController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\Admin\AdminControlsController;
 use App\Http\Controllers\Api\V1\Admin\PaymentVerificationController;
@@ -57,6 +59,8 @@ Route::post('/magic-link/verify', [MagicLinkController::class, 'verify']);
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{product}', [ProductController::class, 'show']);
 Route::get('/delivery-fee', [DeliveryFeeController::class, 'show']);
+Route::get('/degmo', [DegmoController::class, 'index']);
+Route::get('/xaafad', [XaafadController::class, 'index']);
 
 /*
 |--------------------------------------------------------------------------
@@ -113,7 +117,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/suppliers/{supplier}/approve', [SupplierController::class, 'approve']);
         Route::post('/suppliers/{supplier}/reject', [SupplierController::class, 'reject']);
         Route::get('/reports/payout', [ReportController::class, 'payoutReport']);
+        Route::get('/analytics/regions', [AnalyticsController::class, 'regionAnalytics']);
         Route::apiResource('delivery-fees', DeliveryFeeController::class);
+        Route::get('/orders/delivery-list', [OrderController::class, 'deliveryList']);
         Route::get('/location/customers', [LocationController::class, 'index']);
         Route::post('/location/customers/{user}/gps', [LocationController::class, 'updateGps']);
         Route::post('/suppliers/{supplier}/mark-paid', [ReportController::class, 'markPaid']);

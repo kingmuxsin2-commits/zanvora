@@ -55,6 +55,9 @@ class ProductController extends Controller
                     $q->whereHas('order', fn($o) => $o->where('payment_status', 'paid'));
                 }])->orderBy('sales_count', 'desc');
                 break;
+            case 'random':
+                $query->inRandomOrder();
+                break;
             case 'newest':
             default:
                 $query->orderBy('created_at', 'desc');

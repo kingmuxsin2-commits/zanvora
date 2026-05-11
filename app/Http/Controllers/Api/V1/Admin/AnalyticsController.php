@@ -554,7 +554,7 @@ class AnalyticsController extends Controller
         ]);
     }
 
-    // ---------- INVENTORY ANALYTICS (NEW) ----------
+    // ---------- INVENTORY ANALYTICS ----------
     public function inventoryAnalytics(Request $request)
     {
         $this->ensureAdmin($request->user());
@@ -630,6 +630,46 @@ class AnalyticsController extends Controller
             ],
             'daily_trend'        => $dailyTrend,
             'supplier_breakdown' => $freqAnalysis,
+        ]);
+    }
+
+    // ---------- REGION ANALYTICS ----------
+    public function regionAnalytics(Request $request)
+    {
+        $this->ensureAdmin($request->user());
+
+        // Total orders per Degmo (extracted from shipping_address->address field)
+        $orders = Order::where('payment_status', 'paid')->get();
+
+        $regionCounts = $orders->map(function ($order) {
+            $address = $order->shipping_address['address'] ?? '';
+            // Extract Degmo – assume format "Degmo – Xafad" or just the first part before " – "
+            $degmo = explode(' – ', $address)[0] ?? 'Unknown';
+            return trim($degmo);
+        })->countBy()->sortDesc()->take(10);
+
+        // Monthly orders per region (top 5 regions over last 12 months)
+        $topRegions = $regionCounts->keys()->take(5)->toArray();
+
+        $monthlyRegionData = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $month = now()->subMonths($i)->format('Y-m');
+            $monthData = ['month' => $month];
+
+            foreach ($topRegions as $region) {
+                $count = Order::where('payment_status', 'paid')
+                    ->whereYear('created_at', now()->subMonths($i)->year)
+                    ->whereMonth('created_at', now()->subMonths($i)->month)
+                    ->where('shipping_address->address', 'LIKE', "$region%")
+                    ->count();
+                $monthData[$region] = $count;
+            }
+            $monthlyRegionData[] = $monthData;
+        }
+
+        return response()->json([
+            'top_regions' => $regionCounts,
+            'monthly_region_data' => $monthlyRegionData,
         ]);
     }
 
